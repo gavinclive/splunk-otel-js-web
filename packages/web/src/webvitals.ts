@@ -16,33 +16,45 @@ limitations under the License.
 
 import { TracerProvider, Tracer } from '@opentelemetry/api';
 import { hrTime } from '@opentelemetry/core';
-import { getCLS, getLCP, getFID, Metric } from 'web-vitals';
+import { onCLS, onLCP, onFID, MetricWithAttribution } from 'web-vitals/attribution';
 const reported = {};
 
-function report(tracer: Tracer, name: string, metric: Metric): void {
+function report(tracer: Tracer, name: string, metric: MetricWithAttribution): void {
   if (reported[name]) {
     return;
   }
   reported[name] = true;
 
   const value = metric.value;
+  const attribution = metric.attribution;
   const now = hrTime();
 
   const span = tracer.startSpan('webvitals', { startTime: now });
   span.setAttribute(name, value);
+
+  if (attribution.element) {
+    span.setAttribute(`${name}.element`, attribution.element as string);
+  }
+  if (attribution.url) {
+    span.setAttribute(`${name}.url`, attribution.url as string);
+  }
+  if (attribution.largestShiftTarget) {
+    span.setAttribute(`${name}.target`, attribution.largestShiftTarget as string);
+  }
+
   span.end(now);
 }
 
 export function initWebVitals(provider: TracerProvider): void {
   const tracer = provider.getTracer('webvitals');
   // CLS is defined as being sent more than once, easier to just ensure that everything is sent just on the first occurence.
-  getFID((metric) => {
+  onFID((metric) => {
     report(tracer, 'fid', metric);
   });
-  getCLS((metric) => {
+  onCLS((metric) => {
     report(tracer, 'cls', metric);
   });
-  getLCP((metric) => {
+  onLCP((metric) => {
     report(tracer, 'lcp', metric);
   });
 }
